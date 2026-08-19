@@ -244,22 +244,7 @@ document.addEventListener('DOMContentLoaded', function(){
 </script>
 
 <script id="chin-admin-guard">
-(function(){
-  const PIN='1376760';
-  function hide(){document.body.classList.remove('chin-admin-mode');}
-  window.chinAdminLogin=function(){
-    const p=prompt('Админ PIN кодини киритинг:');
-    if(p===PIN){document.body.classList.add('chin-admin-mode');}
-    else if(p!==null){alert('PIN код нотўғри.');}
-  };
-  window.addEventListener('DOMContentLoaded',function(){
-    hide();
-    const btn=document.createElement('button');
-    btn.id='adminLoginBtn'; btn.type='button'; btn.textContent='🔐 Админ';
-    btn.onclick=chinAdminLogin; document.body.appendChild(btn);
-  });
-})();
-</script>
+
 
 
 
