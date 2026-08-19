@@ -360,4 +360,173 @@ setInterval(async()=>{
     }
   }catch(e){}
 },10000);
-</script></body></html>
+</script>
+
+<script id="chin-members-edit-and-forum-fix">
+(function(){
+  // ---------- 1) Аъзолар рўйхатини таҳрирлаш (edit members) ----------
+  let editingMemberId = null;
+
+  const _origShowAdmin = window.showAdmin;
+  window.showAdmin = function(){ editingMemberId = null; _origShowAdmin(); };
+
+  window.adminEdit = function(t){
+    if (t !== 'members') { editingMemberId = null; return renderGenericAdmin(t); }
+    renderMembersAdmin();
+  };
+
+  // re-implementation of the original generic admin editor (for non-member types)
+  function renderGenericAdmin(t){
+    let form = '';
+    if (t === 'settings') {
+      form = `<div class="form"><input id="f_title" value="${esc(db.settings.title)}" placeholder="Сайт номи"><input id="f_sub" value="${esc(db.settings.subtitle)}" placeholder="Қўшимча ном"><textarea id="f_desc">${esc(db.settings.description)}</textarea><label class="theme-label">🎨 Сайт дизайни</label><select id="f_theme"><option value="gold" ${db.settings.theme==='gold'?'selected':''}>1 — Олтин-қизил классик</option><option value="blue" ${db.settings.theme==='blue'?'selected':''}>2 — Қора-кўк замонавий</option><option value="redgold" ${db.settings.theme==='redgold'?'selected':''}>3 — Тилла фон + қизил ёзув</option><option value="green" ${db.settings.theme==='green'?'selected':''}>4 — Яшил замонавий</option></select><label>▣ Карточка бурчаклари</label><select id="f_radius"><option value="8" ${Number(db.settings.cardRadius)===8?'selected':''}>Кам — 8px</option><option value="16" ${Number(db.settings.cardRadius)===16?'selected':''}>Ўрта — 16px</option><option value="24" ${Number(db.settings.cardRadius)===24?'selected':''}>Кўпроқ — 24px</option></select><label>▤ Рамка қалинлиги</label><select id="f_border"><option value="1" ${Number(db.settings.borderWidth)===1?'selected':''}>1px</option><option value="2" ${Number(db.settings.borderWidth)===2?'selected':''}>2px</option><option value="3" ${Number(db.settings.borderWidth)===3?'selected':''}>3px</option><option value="4" ${Number(db.settings.borderWidth)===4?'selected':''}>4px</option></select><label>🌄 Фон услуби</label><select id="f_bg"><option value="gradient" ${db.settings.backgroundStyle==='gradient'?'selected':''}>Градиент</option><option value="solid" ${db.settings.backgroundStyle==='solid'?'selected':''}>Бир хил ранг</option><option value="pattern" ${db.settings.backgroundStyle==='pattern'?'selected':''}>Енгил нақш</option></select><label class="checkrow"><input id="f_features" type="checkbox" ${db.settings.showHomeFeatures!==false?'checked':''}> Бош саҳифада Янгиликлар / Қўшиқлар / Видеолар блокларини кўрсатиш</label><input id="f_logo" type="file" accept="image/*"><button class="btn" onclick="saveSettings()">САҚЛАШ</button></div>`;
+    } else {
+      form = formFor(t);
+    }
+    let list = t !== 'settings' ? `<hr style="border-color:#321416"><div>${(db[t]||[]).map(x=>`<div class="listitem"><span>${esc(x.title||x.name||x.city||'')}</span><button class="btn red" onclick="delItem('${t}',${x.id})">ЎЧИРИШ</button></div>`).join('')}</div>` : '';
+    showModal(`<button class="back" onclick="showAdmin()">← Админ</button><h2>${t==='settings'?'Сайт созламалари':labels[t]}</h2>${form}${list}`);
+  }
+
+  function renderMembersAdmin(){
+    const editing = editingMemberId ? (db.members||[]).find(m=>m.id===editingMemberId) : null;
+    const previewShown = !!(editing && editing.image);
+    const formHtml = `<div class="form">
+      <input id="f_name" placeholder="Аъзо исми" value="${esc(editing?editing.name:'')}">
+      <input id="f_since" placeholder="Йил" value="${esc(editing?editing.since:'')}">
+      <input id="f_tier" placeholder="Даража" value="${esc(editing?editing.tier:'')}">
+      <label style="color:#f7d56b;font-weight:700">📷 Аъзо расми</label>
+      <input id="f_member_image" type="file" accept="image/*" style="display:none" onchange="previewMemberImage(this)">
+      <button type="button" class="btn" style="display:block;width:100%;text-align:center;cursor:pointer;touch-action:manipulation" onclick="document.getElementById('f_member_image').click()">📷 РАСМ ТАНЛАШ</button>
+      <div id="memberImagePreview" style="${previewShown?'':'display:none;'}text-align:center;margin:6px 0"><img id="memberImagePreviewImg" style="width:110px;height:110px;object-fit:cover;border-radius:50%;border:2px solid #d9a52d" ${previewShown?`src="${esc(editing.image)}"`:''}></div>
+      <p class="small">Тугмани босиб телефон галереясидан аъзо расмини танланг.</p>
+      <input id="f_member_image_url" placeholder="ёки расм URL манзили (ихтиёрий)" value="${editing && editing.image && /^https?:\/\//.test(editing.image)?esc(editing.image):''}">
+      <button type="button" class="btn" onclick="saveMember()">${editing?'ЎЗГАРИШЛАРНИ САҚЛАШ':'ҚЎШИШ'}</button>
+      ${editing?`<button type="button" class="btn dark" onclick="cancelMemberEdit()">БЕКОР ҚИЛИШ</button>`:''}
+    </div>`;
+    const listHtml = `<hr style="border-color:#321416"><div>${(db.members||[]).map(x=>`<div class="listitem"><span>${esc(x.name||'')}</span><span style="display:flex;gap:6px"><button class="btn" onclick="startMemberEdit(${x.id})">ТАҲРИР</button><button class="btn red" onclick="delItem('members',${x.id})">ЎЧИРИШ</button></span></div>`).join('')}</div>`;
+    showModal(`<button class="back" onclick="showAdmin()">← Админ</button><h2>${labels.members}</h2>${formHtml}${listHtml}`);
+  }
+
+  window.startMemberEdit = function(id){ editingMemberId = id; renderMembersAdmin(); };
+  window.cancelMemberEdit = function(){ editingMemberId = null; renderMembersAdmin(); };
+
+  window.saveMember = function(){
+    const name = val('f_name'), since = val('f_since'), tier = val('f_tier');
+    if (!name) { alert('Аъзо исмини киритинг'); return; }
+    const input = document.getElementById('f_member_image');
+    const f = input && input.files && input.files[0];
+    const url = val('f_member_image_url');
+
+    function finish(imageData){
+      if (editingMemberId) {
+        const m = (db.members||[]).find(x=>x.id===editingMemberId);
+        if (m) {
+          m.name = name; m.since = since; m.tier = tier;
+          if (imageData) m.image = imageData; else if (url) m.image = url;
+        }
+        editingMemberId = null;
+      } else {
+        const o = { id: Date.now(), name, since, tier };
+        if (imageData) o.image = imageData; else if (url) o.image = url;
+        db.members.push(o);
+      }
+      save();
+      renderMembersAdmin();
+    }
+    if (f) {
+      compressMemberImage(f, data=>{
+        if (!data) { alert('Расмни ўқиб бўлмади. Бошқа расм танланг.'); return; }
+        finish(data);
+      });
+    } else {
+      finish(null);
+    }
+  };
+
+  window.delItem = function(t, id){
+    if (!confirm('Ўчирилсинми?')) return;
+    db[t] = (db[t]||[]).filter(x=>x.id!==id);
+    if (t === 'members' && editingMemberId === id) editingMemberId = null;
+    save();
+    adminEdit(t);
+  };
+
+  // ---------- 2) Форумни ишлайдиган қилиш (working public forum) ----------
+  function forumAuthorName(){
+    try{
+      const s = JSON.parse(localStorage.getItem('chin_member_session')||'null');
+      const u = s && (s.user||s);
+      const meta = (u && u.user_metadata) || {};
+      return meta.name || meta.full_name || '';
+    }catch(e){ return ''; }
+  }
+
+  function forumTopicCard(f){
+    const replies = f.replies || [];
+    const nm = forumAuthorName();
+    return `<article class="card">
+      <h3>💬 ${esc(f.title)}</h3>
+      <p>${esc(f.text)}</p>
+      <span class="pill">${esc(f.author)} • ${replies.length} жавоб</span>
+      ${replies.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid #3a1a1a">${replies.map(r=>`<p style="margin:6px 0;font-size:13px"><b style="color:#f7d56b">${esc(r.author)}:</b> ${esc(r.text)}</p>`).join('')}</div>`:''}
+      <button type="button" class="btn" style="margin-top:10px" onclick="toggleReplyForm(${f.id})">💬 Жавоб ёзиш</button>
+      <div id="replyForm-${f.id}" class="form" style="display:none;margin-top:10px">
+        ${nm?'':`<input id="replyAuthor-${f.id}" placeholder="Исмингиз">`}
+        <textarea id="replyText-${f.id}" placeholder="Жавобингизни ёзинг..."></textarea>
+        <button type="button" class="btn" onclick="submitForumReply(${f.id})">Юбориш</button>
+      </div>
+    </article>`;
+  }
+
+  function forumSection(){
+    const nm = forumAuthorName();
+    const formHtml = `<div class="form" style="margin-bottom:14px">
+      <h3 style="margin:0;color:#f7d56b">✍ Янги мавзу очиш</h3>
+      ${nm?'':'<input id="newForumAuthor" placeholder="Исмингиз">'}
+      <input id="newForumTitle" placeholder="Мавзу сарлавҳаси">
+      <textarea id="newForumText" placeholder="Фикрингизни ёзинг..."></textarea>
+      <button type="button" class="btn" onclick="submitNewForumTopic()">МАВЗУ ҚЎШИШ</button>
+    </div>`;
+    const topics = (db.forum||[]).slice().reverse().map(forumTopicCard).join('');
+    return section(labels.forum, formHtml + (topics || empty()));
+  }
+
+  const _origContent = window.content;
+  window.content = function(p){
+    if (p === 'forum') return forumSection();
+    return _origContent(p);
+  };
+
+  window.toggleReplyForm = function(id){
+    const el = document.getElementById('replyForm-'+id);
+    if (!el) return;
+    el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+  };
+
+  window.submitNewForumTopic = function(){
+    const title = (document.getElementById('newForumTitle')?.value||'').trim();
+    const text = (document.getElementById('newForumText')?.value||'').trim();
+    const authorInput = document.getElementById('newForumAuthor');
+    const author = forumAuthorName() || (authorInput?authorInput.value.trim():'') || 'Мехмон';
+    if (!title || !text) { alert('Мавзу сарлавҳаси ва матнини киритинг'); return; }
+    db.forum.push({ id: Date.now(), title, author, text, replies: [] });
+    save();
+    go('forum');
+  };
+
+  window.submitForumReply = function(id){
+    const textEl = document.getElementById('replyText-'+id);
+    const authorEl = document.getElementById('replyAuthor-'+id);
+    const text = (textEl?.value||'').trim();
+    const author = forumAuthorName() || (authorEl?authorEl.value.trim():'') || 'Мехмон';
+    if (!text) { alert('Жавоб матнини киритинг'); return; }
+    const topic = (db.forum||[]).find(f=>f.id===id);
+    if (!topic) return;
+    if (!topic.replies) topic.replies = [];
+    topic.replies.push({ id: Date.now(), author, text });
+    save();
+    go('forum');
+  };
+})();
+</script>
+</body></html>
